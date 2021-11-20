@@ -15,8 +15,11 @@ async def echo_server(request):
 
 
 async def main():
-    await serve_websocket(echo_server, '127.0.0.1', 8000, ssl_context=None)
+    await serve_websocket(echo_server, '127.0.0.1', 8080, ssl_context=None)
 
 
 if __name__ == '__main__':
-    trio.run(main)
+    try:
+        trio.run(main)
+    except KeyboardInterrupt:
+        print('Server stopped.')
