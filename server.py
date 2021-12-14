@@ -57,7 +57,7 @@ async def talk_to_browser(request):
         except ConnectionClosed:
             break
 
-        await trio.sleep(1)
+        await trio.sleep(0.1)
 
 
 async def get_routing_info(request):
