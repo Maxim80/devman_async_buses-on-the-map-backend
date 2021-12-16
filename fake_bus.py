@@ -1,11 +1,30 @@
 from sys import stderr
 from trio_websocket import open_websocket_url
 from itertools import cycle, islice
+import trio_websocket
 import asyncclick as click
 import trio
 import json
 import os
 import random
+import logging
+
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger('Logger')
+
+
+def relaunch_on_disconnect(func):
+    async def wrapped(*args, **kwargs):
+        while True:
+            try:
+                await func(*args, **kwargs)
+            except (trio_websocket._impl.HandshakeError, trio_websocket._impl.ConnectionClosed):
+                logger.info('Нет подключения')
+                await trio.sleep(1)
+                continue
+
+    return wrapped
 
 
 def generate_bus_id(route_id, bus_index):
@@ -20,14 +39,13 @@ def load_routes(directory_path='routes'):
                 yield json.load(file)
 
 
+@relaunch_on_disconnect
 async def send_updates(server_address, receive_channel):
     async with open_websocket_url(f'ws://{server_address}') as ws:
+        logger.info('Подключение установлено')
         async for bus_routing_info in receive_channel:
-            try:
-                await ws.send_message(json.dumps(bus_routing_info, ensure_ascii=False))
+            await ws.send_message(json.dumps(bus_routing_info, ensure_ascii=False))
 
-            except OSError as ose:
-                print('Connection attempt failed: %s' % ose, file=stderr)
 
 
 async def run_bus(send_channel, bus_index, route, delay):
@@ -54,6 +72,7 @@ async def run_bus(send_channel, bus_index, route, delay):
 @click.option('-rt', '--refresh_timeout', default=0.3, help='Delay in updating coordinates')
 @click.option('-v', '--verbose', default=False, help='Enable logging')
 async def main(**kwargs):
+    logger.disabled = not kwargs['verbose']
     channels = [trio.open_memory_channel(0) for _ in range(0, kwargs['websockets_number'])]
     async with trio.open_nursery() as nursery:
         for _, receive_channel in channels:
