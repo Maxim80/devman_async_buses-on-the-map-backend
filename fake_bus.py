@@ -1,6 +1,7 @@
 from sys import stderr
 from trio_websocket import open_websocket_url
 from itertools import cycle, islice
+from contextlib import suppress
 import trio_websocket
 import asyncclick as click
 import trio
@@ -8,10 +9,15 @@ import json
 import os
 import random
 import logging
+import sys
+from logging import StreamHandler, Formatter
 
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger('Logger')
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+handler = StreamHandler(stream=sys.stdout)
+handler.setFormatter(Formatter(fmt='[%(asctime)s: %(levelname)s] %(message)s'))
+logger.addHandler(handler)
 
 
 def relaunch_on_disconnect(func):
@@ -20,7 +26,7 @@ def relaunch_on_disconnect(func):
             try:
                 await func(*args, **kwargs)
             except (trio_websocket._impl.HandshakeError, trio_websocket._impl.ConnectionClosed):
-                logger.info('Нет подключения')
+                logger.debug('Нет подключения')
                 await trio.sleep(1)
                 continue
 
@@ -42,7 +48,7 @@ def load_routes(directory_path='routes'):
 @relaunch_on_disconnect
 async def send_updates(server_address, receive_channel):
     async with open_websocket_url(f'ws://{server_address}') as ws:
-        logger.info('Подключение установлено')
+        logger.debug('Подключение установлено')
         async for bus_routing_info in receive_channel:
             await ws.send_message(json.dumps(bus_routing_info, ensure_ascii=False))
 
@@ -65,8 +71,8 @@ async def run_bus(send_channel, bus_index, route, delay):
 
 @click.command()
 @click.option('-s', '--server', default='127.0.0.1:8080', help='Server address')
-@click.option('-rn', '--routes_number', default=100, help='Routes number')
-@click.option('-bpr', '--buses_per_route', default=5, help='Number of buses on the route')
+@click.option('-rn', '--routes_number', default=20, help='Routes number')
+@click.option('-bpr', '--buses_per_route', default=2, help='Number of buses on the route')
 @click.option('-wn', '--websockets_number', default=10, help='Number of open web sockets')
 @click.option('-ei', '--emulator_id', default='00a', help='BusId prefix in case of running multiple instances of the simulator')
 @click.option('-rt', '--refresh_timeout', default=0.3, help='Delay in updating coordinates')
@@ -86,17 +92,5 @@ async def main(**kwargs):
 
 
 if __name__ == '__main__':
-    main(_anyio_backend="trio")
-    # try:
-    #     trio.run(main)
-    # except:
-    #     print('Connection closed')
-
-"""
-{
-    "busId": "c790сс",
-    "lat": 55.747629944737,
-    "lng": 37.641726387317,
-    "route": "156"
-}
-"""
+    with suppress(KeyboardInterrupt):
+        main(_anyio_backend="trio")

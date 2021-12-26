@@ -1,8 +1,17 @@
 from trio_websocket import serve_websocket, ConnectionClosed
 from functools import partial
+from logging import StreamHandler, Formatter
 import trio
 import json
-import pprint
+import logging
+import sys
+
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+handler = StreamHandler(stream=sys.stdout)
+handler.setFormatter(Formatter(fmt='[%(asctime)s: %(levelname)s] %(message)s'))
+logger.addHandler(handler)
 
 
 # BUSES_DATABASE - имитация базы данных с автобусами, их текущими координатами
@@ -48,8 +57,19 @@ def get_info_from_database():
     return {'msgType': 'Buses', 'buses': routing_info}
 
 
-async def talk_to_browser(request):
-    ws = await request.accept()
+# async def talk_to_browser(request):
+#     ws = await request.accept()
+#     while True:
+#         current_routing_info = get_info_from_database()
+#         try:
+#             await ws.send_message(json.dumps(current_routing_info))
+#         except ConnectionClosed:
+#             break
+#
+#         await trio.sleep(0.1)
+
+
+async def send_to_browser(ws):
     while True:
         current_routing_info = get_info_from_database()
         try:
@@ -57,18 +77,34 @@ async def talk_to_browser(request):
         except ConnectionClosed:
             break
 
-        await trio.sleep(0.1)
+
+async def read_from_browser(ws):
+    while True:
+        try:
+            browser_message = await ws.get_message()
+            print(json.loads(browser_message))
+        except ConnectionClosed:
+            break
+
+        logger.debug(json.loads(browser_message))
+
+
+async def talk_to_browser(request):
+    ws = await request.accept()
+    async with trio.open_nursery() as nursery:
+        nursery.start_soon(send_to_browser, ws)
+        nursery.start_soon(read_from_browser, ws)
 
 
 async def get_routing_info(request):
     ws = await request.accept()
     while True:
-            try:
-                bus_routing_info = await ws.get_message()
-            except ConnectionClosed:
-                break
+        try:
+            bus_routing_info = await ws.get_message()
+        except ConnectionClosed:
+            break
 
-            update_buses_database(json.loads(bus_routing_info))
+        update_buses_database(json.loads(bus_routing_info))
 
 
 async def main():
