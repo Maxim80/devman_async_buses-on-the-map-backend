@@ -1,122 +1,132 @@
 from trio_websocket import serve_websocket, ConnectionClosed
 from functools import partial
-from logging import StreamHandler, Formatter
+from contextlib import suppress
+import asyncclick as click
 import trio
 import json
 import logging
-import sys
+import dataclasses
 
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-handler = StreamHandler(stream=sys.stdout)
-handler.setFormatter(Formatter(fmt='[%(asctime)s: %(levelname)s] %(message)s'))
-logger.addHandler(handler)
-
-
-# BUSES_DATABASE - имитация базы данных с автобусами, их текущими координатами
-# и номером марщрута.
-# Структура:
-#         {
-#             busId: {
-#             lat: lat,
-#             lng: lng,
-#             route: route,
-#             }
-#         }
 BUSES_DATABASE = {}
 
 
-def update_buses_database(bus_routing_info):
-    bus_id = bus_routing_info['busId']
-    lat, lng = bus_routing_info['lat'], bus_routing_info['lng']
-    route = bus_routing_info['route']
-    if not BUSES_DATABASE.get(bus_id):
-        BUSES_DATABASE.update({
-            bus_id: {
-                'lat': lat,
-                'lng': lng,
-                'route': route,
-            }
-        })
-    else:
-        BUSES_DATABASE[bus_id]['lat'] = bus_routing_info['lat']
-        BUSES_DATABASE[bus_id]['lng'] = bus_routing_info['lng']
+@dataclasses.dataclass
+class Bus:
+    busId: str
+    lat: float
+    lng: float
+    route: str
 
 
-def get_info_from_database():
-    routing_info = [
-        {
-            'busId': key,
-            'lat': value['lat'],
-            'lng': value['lng'],
-            'route': value['route'],
-        }
-        for key, value in BUSES_DATABASE.items()
-    ]
-    return {'msgType': 'Buses', 'buses': routing_info}
+@dataclasses.dataclass
+class WindowBounds:
+    south_lat: float
+    north_lat: float
+    west_lng: float
+    east_lng: float
+
+    def update(self, south_lat, north_lat, west_lng, east_lng):
+        self.south_lat = south_lat
+        self.north_lat = north_lat
+        self.west_lng = west_lng
+        self.east_lng = east_lng
+
+    def is_inside(self, lat, lng):
+        is_lat = self.south_lat <= lat <= self.north_lat
+        is_lng = self.west_lng <= lng <= self.east_lng
+        if is_lat and is_lng:
+            return True
+        else:
+            return False
 
 
-# async def talk_to_browser(request):
-#     ws = await request.accept()
-#     while True:
-#         current_routing_info = get_info_from_database()
-#         try:
-#             await ws.send_message(json.dumps(current_routing_info))
-#         except ConnectionClosed:
-#             break
-#
-#         await trio.sleep(0.1)
+def get_logger(name):
+    logging.basicConfig()
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
+    return logger
 
 
-async def send_to_browser(ws):
+async def send_to_browser(ws, bounds):
     while True:
-        current_routing_info = get_info_from_database()
+        buses = [
+            dataclasses.asdict(bus)
+            for bus in BUSES_DATABASE.values()
+            if bounds.is_inside(bus.lat, bus.lng)
+        ]
+        buses_info = {'msgType': 'Buses', 'buses': buses}
         try:
-            await ws.send_message(json.dumps(current_routing_info))
+            await ws.send_message(json.dumps(buses_info))
         except ConnectionClosed:
             break
 
+        logger.debug(f'{len(buses)} buses inside bounds')
+        await trio.sleep(1)
 
-async def read_from_browser(ws):
+
+async def read_from_browser(ws, bounds):
     while True:
         try:
-            browser_message = await ws.get_message()
-            print(json.loads(browser_message))
+            msg = await ws.get_message()
         except ConnectionClosed:
             break
 
-        logger.debug(json.loads(browser_message))
+        msg = json.loads(msg)
+        bounds.update(**msg['data'])
+        logger.debug(msg)
 
 
 async def talk_to_browser(request):
     ws = await request.accept()
+    bounds = WindowBounds(
+        **{'south_lat': 0, 'north_lat': 0, 'west_lng': 0, 'east_lng': 0}
+    )
     async with trio.open_nursery() as nursery:
-        nursery.start_soon(send_to_browser, ws)
-        nursery.start_soon(read_from_browser, ws)
+        nursery.start_soon(send_to_browser, ws, bounds)
+        nursery.start_soon(read_from_browser, ws, bounds)
 
 
-async def get_routing_info(request):
+async def get_bus_info(request):
     ws = await request.accept()
     while True:
         try:
-            bus_routing_info = await ws.get_message()
+            msg = await ws.get_message()
         except ConnectionClosed:
             break
 
-        update_buses_database(json.loads(bus_routing_info))
+        bus_info = json.loads(msg)
+        bus = Bus(**bus_info)
+        BUSES_DATABASE.update({bus_info['busId']: bus})
 
 
-async def main():
-    recipient_info = partial(serve_websocket, get_routing_info, '127.0.0.1', 8080, ssl_context=None)
-    sender_info = partial(serve_websocket, talk_to_browser, '127.0.0.1', 8000, ssl_context=None)
+@click.command()
+@click.option('--bus_port', default=8080, help='Bus port')
+@click.option('--browser_port', default=8000, help='Browser port')
+@click.option('--debug/--no-debug', default=False, help='Enable logging')
+async def main(**kwargs):
+    logger.disabled = not kwargs['debug']
+
+    sender = partial(
+        serve_websocket,
+        talk_to_browser,
+        '127.0.0.1', kwargs['browser_port'],
+        ssl_context=None)
+
+    receiver = partial(
+        serve_websocket,
+        get_bus_info,
+        '127.0.0.1', kwargs['bus_port'],
+        ssl_context=None
+    )
+
     async with trio.open_nursery() as nursery:
-        nursery.start_soon(sender_info)
-        nursery.start_soon(recipient_info)
+        nursery.start_soon(sender)
+        nursery.start_soon(receiver)
 
 
 if __name__ == '__main__':
-    try:
-        trio.run(main)
-    except KeyboardInterrupt:
-        print('Server stopped.')
+    logger = get_logger('FAKE_BUS')
+
+    with suppress(KeyboardInterrupt):
+        main(_anyio_backend="trio")

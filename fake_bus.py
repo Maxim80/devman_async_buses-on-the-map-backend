@@ -1,4 +1,3 @@
-from sys import stderr
 from trio_websocket import open_websocket_url
 from itertools import cycle, islice
 from contextlib import suppress
@@ -9,15 +8,13 @@ import json
 import os
 import random
 import logging
-import sys
-from logging import StreamHandler, Formatter
 
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-handler = StreamHandler(stream=sys.stdout)
-handler.setFormatter(Formatter(fmt='[%(asctime)s: %(levelname)s] %(message)s'))
-logger.addHandler(handler)
+def get_logger(name):
+    logging.basicConfig()
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
+    return logger
 
 
 def relaunch_on_disconnect(func):
@@ -25,7 +22,8 @@ def relaunch_on_disconnect(func):
         while True:
             try:
                 await func(*args, **kwargs)
-            except (trio_websocket._impl.HandshakeError, trio_websocket._impl.ConnectionClosed):
+            except (trio_websocket._impl.HandshakeError,
+                    trio_websocket._impl.ConnectionClosed):
                 logger.debug('Нет подключения')
                 await trio.sleep(1)
                 continue
@@ -50,7 +48,8 @@ async def send_updates(server_address, receive_channel):
     async with open_websocket_url(f'ws://{server_address}') as ws:
         logger.debug('Подключение установлено')
         async for bus_routing_info in receive_channel:
-            await ws.send_message(json.dumps(bus_routing_info, ensure_ascii=False))
+            await ws.send_message(
+                json.dumps(bus_routing_info, ensure_ascii=False))
 
 
 
@@ -70,16 +69,23 @@ async def run_bus(send_channel, bus_index, route, delay):
 
 
 @click.command()
-@click.option('-s', '--server', default='127.0.0.1:8080', help='Server address')
-@click.option('-rn', '--routes_number', default=20, help='Routes number')
-@click.option('-bpr', '--buses_per_route', default=2, help='Number of buses on the route')
-@click.option('-wn', '--websockets_number', default=10, help='Number of open web sockets')
-@click.option('-ei', '--emulator_id', default='00a', help='BusId prefix in case of running multiple instances of the simulator')
-@click.option('-rt', '--refresh_timeout', default=0.3, help='Delay in updating coordinates')
-@click.option('-v', '--verbose', default=False, help='Enable logging')
+@click.option('--server', default='127.0.0.1:8080', help='Server address')
+@click.option('--routes_number', default=20, help='Routes number')
+@click.option('--buses_per_route', default=2,
+    help='Number of buses on the route')
+@click.option('--websockets_number', default=10,
+    help='Number of open web sockets')
+@click.option('--emulator_id', default='00a',
+    help='BusId prefix in case of running multiple instances of the simulator')
+@click.option('--refresh_timeout', default=0.3,
+    help='Delay in updating coordinates')
+@click.option('--debug/--no-debug', default=False, help='Enable logging')
 async def main(**kwargs):
-    logger.disabled = not kwargs['verbose']
-    channels = [trio.open_memory_channel(0) for _ in range(0, kwargs['websockets_number'])]
+    logger.disabled = not kwargs['debug']
+    channels = [
+        trio.open_memory_channel(0)
+        for _ in range(0, kwargs['websockets_number'])
+    ]
     async with trio.open_nursery() as nursery:
         for _, receive_channel in channels:
             nursery.start_soon(send_updates, kwargs['server'], receive_channel)
@@ -88,9 +94,12 @@ async def main(**kwargs):
             for index in range(kwargs['buses_per_route']):
                 bus_index = f"{kwargs['emulator_id']}{index}"
                 send_channel, _ = random.choice(channels)
-                nursery.start_soon(run_bus, send_channel, bus_index, route, kwargs['refresh_timeout'])
+                nursery.start_soon(run_bus, send_channel, bus_index, route,
+                    kwargs['refresh_timeout'])
 
 
 if __name__ == '__main__':
+    logger = get_logger('FAKE_BUS')
+
     with suppress(KeyboardInterrupt):
         main(_anyio_backend="trio")
