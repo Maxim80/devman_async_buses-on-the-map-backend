@@ -32,7 +32,7 @@ def relaunch_on_disconnect(func):
 
 
 def generate_bus_id(route_id, bus_index):
-    return f"{route_id}-{bus_index}"
+    return f"{bus_index}-{route_id}"
 
 
 def load_routes(directory_path='routes'):

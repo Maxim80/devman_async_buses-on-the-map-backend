@@ -14,104 +14,174 @@ def test_correct_json():
             "west_lng": 37.54440307617188,
         },
     }
-    value = client_validator(json.dumps(msg))
+    value = browser_validator(json.dumps(msg))
     assert value == msg
 
 
-def test_not_json_1():
+def test_not_json():
+    msg = 'some string'
     with pytest.raises(MessageErrors, match='Requires valid JSON'):
-        msg = 'some string'
-        client_validator(msg)
+        browser_validator(msg)
 
 
-def test_not_json_2():
-    with pytest.raises(MessageErrors, match='Requires valid JSON'):
-        msg = ''
-        client_validator(msg)
-
-
-def test_not_valid_json_1():
-    with pytest.raises(MessageErrors, match='Requires valid JSON'):
-        msg = {"a": 123, "b": 456}
-        client_validator(json.dumps(msg))
-
-
-def test_not_valid_json_2():
-    with pytest.raises(MessageErrors, match='Requires valid JSON'):
-        msg = {
-            "msgType": "newBounds",
-            "data": {
-                "east_lng": 37.65563964843751,
-                "north_lat": 55.77367652953477,
-                "south_lat": 55.72628839374007,
-                "west_lng": 37.54440307617188,
-            },
-            "data1": {},
-        }
-        client_validator(json.dumps(msg))
-
-def test_not_valid_json_3():
-    with pytest.raises(MessageErrors, match='Requires valid JSON'):
-        msg = {
-            "data": {
-                "east_lng": 37.65563964843751,
-                "north_lat": 55.77367652953477,
-                "south_lat": 55.72628839374007,
-                "west_lng": 37.54440307617188,
-            },
-        }
-        client_validator(json.dumps(msg))
-
-
-def test_not_valid_json_4():
-    with pytest.raises(MessageErrors, match='Requires valid JSON'):
-        msg = {
-            "msgType": "newBounds",
-            "data": [
-                37.65563964843751,
-                55.77367652953477,
-                55.72628839374007,
-                37.54440307617188,
-            ],
-        }
-        client_validator(json.dumps(msg))
-
-
-def test_not_valid_json_5():
-    with pytest.raises(MessageErrors, match='Requires valid JSON'):
-        msg = {
-            "msgType": "newBounds",
-            "data": {
-                "north_lat": 55.77367652953477,
-                "west_lng": 37.54440307617188,
-            },
-        }
-        client_validator(json.dumps(msg))
-
-
-def test_msgtype_not_specified_1():
+def test_not_valid_json():
+    msg = {"a": 123, "b": 456}
     with pytest.raises(MessageErrors, match='Requires msgType specified'):
-        msg = {
-            "msgType": "",
-            "data": {
-                "east_lng": 37.65563964843751,
-                "north_lat": 55.77367652953477,
-                "south_lat": 55.72628839374007,
-                "west_lng": 37.54440307617188,
-            },
+        browser_validator(json.dumps(msg))
+
+
+def test_no_msgtype():
+    msg = {
+        "data": {
+            "east_lng": 37.65563964843751,
+            "north_lat": 55.77367652953477,
+            "south_lat": 55.72628839374007,
+            "west_lng": 37.54440307617188,
         }
-        client_validator(json.dumps(msg))
-
-
-def test_msgtype_not_specified_2():
+    }
     with pytest.raises(MessageErrors, match='Requires msgType specified'):
-        msg = {
-            "msgType": "someType",
-            "data": {
-                "east_lng": 37.65563964843751,
-                "north_lat": 55.77367652953477,
-                "south_lat": 55.72628839374007,
-                "west_lng": 37.54440307617188,
-            },
+        browser_validator(json.dumps(msg))
+
+
+def test_not_correct_msgtype():
+    msg = {
+        "msgType": 11111,
+        "data": {
+            "east_lng": 37.65563964843751,
+            "north_lat": 55.77367652953477,
+            "south_lat": 55.72628839374007,
+            "west_lng": 37.54440307617188,
         }
-        client_validator(json.dumps(msg))
+    }
+    with pytest.raises(MessageErrors, match='Requires msgType specified'):
+        browser_validator(json.dumps(msg))
+
+
+def test_no_data():
+    msg = {
+        "msgType": "newBounds"
+    }
+    with pytest.raises(MessageErrors, match='Requires data specified'):
+        browser_validator(json.dumps(msg))
+
+
+def test_not_correct_data():
+    msg = {
+        "msgType": "newBounds",
+        "data": [
+            37.65563964843751,
+            55.77367652953477,
+            55.72628839374007,
+            37.54440307617188,
+        ],
+    }
+    with pytest.raises(MessageErrors, match='Requires data specified'):
+        browser_validator(json.dumps(msg))
+
+
+def test_no_west_lng():
+    msg = {
+        "msgType": "newBounds",
+        "data": {
+            "east_lng": 37.65563964843751,
+            "north_lat": 55.77367652953477,
+            "south_lat": 55.72628839374007,
+        },
+    }
+    with pytest.raises(MessageErrors, match='Requires west_lng specified'):
+        browser_validator(json.dumps(msg))
+
+
+def test_not_correct_west_lng():
+    msg = {
+        "msgType": "newBounds",
+        "data": {
+            "east_lng": 37.65563964843751,
+            "north_lat": 55.77367652953477,
+            "south_lat": 55.72628839374007,
+            "west_lng": [37.54440307617188],
+        },
+    }
+    with pytest.raises(MessageErrors, match='Requires west_lng specified'):
+        browser_validator(json.dumps(msg))
+
+
+def test_no_east_lng():
+    msg = {
+        "msgType": "newBounds",
+        "data": {
+            "north_lat": 55.77367652953477,
+            "south_lat": 55.72628839374007,
+            "west_lng": 37.54440307617188,
+        },
+    }
+    with pytest.raises(MessageErrors, match='Requires east_lng specified'):
+        browser_validator(json.dumps(msg))
+
+
+def test_not_correct_east_lng():
+    msg = {
+        "msgType": "newBounds",
+        "data": {
+            "east_lng": "37.65563964843751",
+            "north_lat": 55.77367652953477,
+            "south_lat": 55.72628839374007,
+            "west_lng": 37.54440307617188,
+        },
+    }
+    with pytest.raises(MessageErrors, match='Requires east_lng specified'):
+        browser_validator(json.dumps(msg))
+
+
+def test_no_north_lat():
+    msg = {
+        "msgType": "newBounds",
+        "data": {
+            "east_lng": 37.65563964843751,
+            "south_lat": 55.72628839374007,
+            "west_lng": 37.54440307617188,
+        },
+    }
+    with pytest.raises(MessageErrors, match='Requires north_lat specified'):
+        browser_validator(json.dumps(msg))
+
+
+def test_not_correct_north_lat():
+    msg = {
+        "msgType": "newBounds",
+        "data": {
+            "east_lng": 37.65563964843751,
+            "north_lat": {"north_lat": 55.77367652953477},
+            "south_lat": 55.72628839374007,
+            "west_lng": 37.54440307617188,
+        },
+    }
+    with pytest.raises(MessageErrors, match='Requires north_lat specified'):
+        browser_validator(json.dumps(msg))
+
+
+def test_no_south_lat():
+    msg = {
+        "msgType": "newBounds",
+        "data": {
+            "east_lng": 37.65563964843751,
+            "north_lat": 37.54440307617188,
+            "west_lng": 37.54440307617188,
+        },
+    }
+    with pytest.raises(MessageErrors, match='Requires south_lat specified'):
+        browser_validator(json.dumps(msg))
+
+
+def test_not_correct_south_lat():
+    msg = {
+        "msgType": "newBounds",
+        "data": {
+            "east_lng": 37.65563964843751,
+            "north_lat": 55.72628839374007,
+            "south_lat": None,
+            "west_lng": 37.54440307617188,
+        },
+    }
+    with pytest.raises(MessageErrors, match='Requires south_lat specified'):
+        browser_validator(json.dumps(msg))

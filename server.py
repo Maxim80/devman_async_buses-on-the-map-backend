@@ -1,7 +1,7 @@
 from trio_websocket import serve_websocket, ConnectionClosed
 from functools import partial
 from contextlib import suppress
-from validators import browser_validator, MessageErrors
+from validators import browser_validator, browser_validator, MessageErrors
 import asyncclick as click
 import trio
 import json
@@ -97,9 +97,13 @@ async def get_bus_info(request):
     while True:
         try:
             bus_info = await ws.get_message()
-            bus_info = json.loads(bus_info)
+            bus_info = browser_validator(bus_info)
         except ConnectionClosed:
             break
+        except MessageErrors as err:
+            err_msg = {'msgType': 'Errors', 'errors': [str(err)]}
+            await ws.send_message(json.dumps(err_msg))
+            continue
 
         bus = Bus(**bus_info)
         BUSES_DATABASE.update({bus_info['busId']: bus})
