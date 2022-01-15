@@ -1,6 +1,7 @@
 from trio_websocket import serve_websocket, ConnectionClosed
 from functools import partial
 from contextlib import suppress
+from validators import browser_validator, MessageErrors
 import asyncclick as click
 import trio
 import json
@@ -62,17 +63,21 @@ async def send_to_browser(ws, bounds):
             break
 
         logger.debug(f'{len(buses)} buses inside bounds')
-        await trio.sleep(1)
+        await trio.sleep(0.3)
 
 
 async def read_from_browser(ws, bounds):
     while True:
         try:
             msg = await ws.get_message()
+            msg = client_validator(msg)
         except ConnectionClosed:
             break
+        except MessageErrors as err:
+            err_msg = {'msgType': 'Errors', 'errors': [str(err)]}
+            await ws.send_message(json.dumps(err_msg))
+            continue
 
-        msg = json.loads(msg)
         bounds.update(**msg['data'])
         logger.debug(msg)
 
@@ -91,11 +96,11 @@ async def get_bus_info(request):
     ws = await request.accept()
     while True:
         try:
-            msg = await ws.get_message()
+            bus_info = await ws.get_message()
+            bus_info = json.loads(bus_info)
         except ConnectionClosed:
             break
 
-        bus_info = json.loads(msg)
         bus = Bus(**bus_info)
         BUSES_DATABASE.update({bus_info['busId']: bus})
 
@@ -126,7 +131,7 @@ async def main(**kwargs):
 
 
 if __name__ == '__main__':
-    logger = get_logger('FAKE_BUS')
+    logger = get_logger('SERVER')
 
     with suppress(KeyboardInterrupt):
         main(_anyio_backend="trio")
