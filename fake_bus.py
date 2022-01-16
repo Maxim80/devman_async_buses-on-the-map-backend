@@ -70,8 +70,8 @@ async def run_bus(send_channel, bus_index, route, delay):
 
 @click.command()
 @click.option('--server', default='127.0.0.1:8080', help='Server address')
-@click.option('--routes_number', default=20, help='Routes number')
-@click.option('--buses_per_route', default=2,
+@click.option('--routes_number', default=100, help='Routes number')
+@click.option('--buses_per_route', default=5,
     help='Number of buses on the route')
 @click.option('--websockets_number', default=10,
     help='Number of open web sockets')

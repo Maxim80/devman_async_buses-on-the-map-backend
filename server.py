@@ -1,7 +1,7 @@
 from trio_websocket import serve_websocket, ConnectionClosed
 from functools import partial
 from contextlib import suppress
-from validators import browser_validator, browser_validator, MessageErrors
+from validators import browser_validator, bus_validator, MessageErrors
 import asyncclick as click
 import trio
 import json
@@ -70,7 +70,7 @@ async def read_from_browser(ws, bounds):
     while True:
         try:
             msg = await ws.get_message()
-            msg = client_validator(msg)
+            msg = browser_validator(msg)
         except ConnectionClosed:
             break
         except MessageErrors as err:
@@ -97,7 +97,7 @@ async def get_bus_info(request):
     while True:
         try:
             bus_info = await ws.get_message()
-            bus_info = browser_validator(bus_info)
+            bus_info = bus_validator(bus_info)
         except ConnectionClosed:
             break
         except MessageErrors as err:
