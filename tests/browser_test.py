@@ -43,20 +43,6 @@ def test_no_msgtype():
         browser_validator(json.dumps(msg))
 
 
-def test_not_correct_msgtype():
-    msg = {
-        "msgType": 11111,
-        "data": {
-            "east_lng": 37.65563964843751,
-            "north_lat": 55.77367652953477,
-            "south_lat": 55.72628839374007,
-            "west_lng": 37.54440307617188,
-        }
-    }
-    with pytest.raises(MessageErrors, match='Requires msgType specified'):
-        browser_validator(json.dumps(msg))
-
-
 def test_no_data():
     msg = {
         "msgType": "newBounds"

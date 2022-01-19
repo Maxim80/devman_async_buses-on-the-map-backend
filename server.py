@@ -36,11 +36,6 @@ class WindowBounds:
     def is_inside(self, lat, lng):
         is_lat = self.south_lat <= lat <= self.north_lat
         is_lng = self.west_lng <= lng <= self.east_lng
-        # if is_lat and is_lng:
-        #     return True
-        # else:
-        #     return False
-
         return is_lat and is_lng
 
 def get_logger(name):
